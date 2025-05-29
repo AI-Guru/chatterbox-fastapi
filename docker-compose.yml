@@ -13,7 +13,7 @@ services:
       - LOG_LEVEL=info
     volumes:
       - ./models:/app/models  # Persist model cache between restarts
-    restart: unless-stopped
+    restart: no
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s

@@ -1,5 +1,7 @@
 # Chatterbox FastAPI Server
 
+![Banner](banner.png)
+
 An OpenAI-compatible Text-to-Speech (TTS) API server built with FastAPI and the Chatterbox model by Resemble AI. This server provides a drop-in replacement for OpenAI's TTS API endpoint, allowing you to use the open-source Chatterbox model with any application that supports the OpenAI TTS API.
 
 ## Features
