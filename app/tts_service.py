@@ -91,6 +91,19 @@ class TTSService:
             logger.info(f"Successfully generated {len(audio_bytes)} bytes of {response_format} audio")
             return audio_bytes
             
+        except RuntimeError as e:
+            error_msg = str(e)
+            if "CUDA" in error_msg:
+                logger.error(f"CUDA error during speech generation: {error_msg}")
+                if "device-side assert" in error_msg:
+                    raise RuntimeError("Invalid audio file for voice cloning. Please ensure the audio file is a valid WAV file with proper format (16kHz, mono recommended)")
+                elif "out of memory" in error_msg:
+                    raise RuntimeError("GPU out of memory. Try using a shorter audio sample or restart the service")
+                else:
+                    raise RuntimeError(f"GPU error during speech generation: {error_msg}")
+            else:
+                logger.error(f"Runtime error during speech generation: {error_msg}")
+                raise
         except Exception as e:
             logger.error(f"Failed to generate speech: {str(e)}")
             raise

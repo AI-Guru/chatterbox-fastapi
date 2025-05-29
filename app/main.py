@@ -265,7 +265,7 @@ async def create_speech_with_cloning(
     voice: str = Form(default="custom", description="Voice parameter (kept for compatibility)"),
     response_format: str = Form(default="mp3", description="The audio format"),
     speed: float = Form(default=1.0, description="The speed of the generated audio"),
-    audio_prompt: UploadFile = File(..., description="Audio file for voice cloning (WAV format recommended)")
+    audio_prompt: UploadFile = File(..., description="Audio file for voice cloning (WAV format, 16kHz, mono, 5-30 seconds recommended)")
 ):
     """
     Extended TTS endpoint with voice cloning support
@@ -296,13 +296,23 @@ async def create_speech_with_cloning(
         if audio_prompt:
             logger.info(f"Processing uploaded audio file: {audio_prompt.filename}")
             
-            # Create temporary file for audio prompt
-            file_extension = audio_prompt.filename.split('.')[-1] if '.' in audio_prompt.filename else 'wav'
-            temp_file = tempfile.NamedTemporaryFile(suffix=f".{file_extension}", delete=False)
+            # Validate file type
+            if audio_prompt.content_type and not audio_prompt.content_type.startswith('audio/'):
+                raise ValueError("Uploaded file must be an audio file")
+            
+            # Check file size (limit to 50MB)
+            content = await audio_prompt.read()
+            if len(content) > 50 * 1024 * 1024:  # 50MB
+                raise ValueError("Audio file too large. Maximum size is 50MB")
+            
+            if len(content) < 1000:  # Too small to be a valid audio file
+                raise ValueError("Audio file too small. Please upload a valid audio file")
+            
+            # Always save as .wav for compatibility with Chatterbox
+            temp_file = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
             audio_prompt_path = temp_file.name
             
             # Save uploaded file content
-            content = await audio_prompt.read()
             async with aiofiles.open(audio_prompt_path, 'wb') as f:
                 await f.write(content)
             
