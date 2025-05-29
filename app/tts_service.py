@@ -51,6 +51,8 @@ class TTSService:
         voice: str = "nova",
         speed: float = 1.0,
         response_format: str = "wav",
+        exaggeration: float = 0.5,
+        cfg: float = 0.5,
         audio_prompt_path: Optional[str] = None
     ) -> bytes:
         """
@@ -58,9 +60,12 @@ class TTSService:
         
         Args:
             text: The text to convert to speech
-            voice: The voice to use (mapped internally)
+            voice: The voice to use (kept for compatibility but ignored)
             speed: The speed of the speech (0.25 to 4.0)
             response_format: The output audio format
+            exaggeration: Emotion intensity and speech expressiveness (0.0 to 1.0)
+            cfg: Classifier-free guidance weight for speech pacing (0.0 to 1.0)
+            audio_prompt_path: Path to audio file for voice cloning
             
         Returns:
             Audio data as bytes
@@ -69,9 +74,10 @@ class TTSService:
             # Voice parameter is kept for API compatibility but ignored
             logger.info(f"Generating speech for text: {text[:50]}...")
             
-            # Generate the audio waveform with default parameters
+            # Generate the audio waveform with specified parameters
             generate_kwargs = {
-                "exaggeration": 0.5  # Use default exaggeration
+                "exaggeration": exaggeration,
+                "cfg_weight": cfg
             }
             
             # Add audio prompt for voice cloning if provided

@@ -156,7 +156,9 @@ async def create_speech(
     input: str = Form(default="To know that you know nothing is the first step to enlightenment.", description="The text to generate audio for"),
     voice: str = Form(default="nova", description="Voice parameter (kept for compatibility but ignored)"),
     response_format: str = Form(default="mp3", description="The audio format"),
-    speed: float = Form(default=1.0, description="The speed of the generated audio")
+    speed: float = Form(default=1.0, description="The speed of the generated audio"),
+    exaggeration: float = Form(default=0.5, description="Emotion intensity and speech expressiveness (0.0-1.0)"),
+    cfg: float = Form(default=0.5, description="Classifier-free guidance for speech pacing (0.0-1.0)")
 ):
     """
     OpenAI-compatible text-to-speech endpoint
@@ -165,7 +167,7 @@ async def create_speech(
     It's designed to be compatible with OpenAI's TTS API.
     """
     try:
-        logger.info(f"Received TTS request: voice={voice}, format={response_format}, speed={speed}")
+        logger.info(f"Received TTS request: voice={voice}, format={response_format}, speed={speed}, exaggeration={exaggeration}, cfg={cfg}")
         
         # Validate input text
         if not input or not input.strip():
@@ -174,6 +176,14 @@ async def create_speech(
         # Validate speed
         if speed < 0.25 or speed > 4.0:
             raise ValueError("Speed must be between 0.25 and 4.0")
+        
+        # Validate exaggeration
+        if exaggeration < 0.0 or exaggeration > 1.0:
+            raise ValueError("Exaggeration must be between 0.0 and 1.0")
+        
+        # Validate cfg
+        if cfg < 0.0 or cfg > 1.0:
+            raise ValueError("CFG must be between 0.0 and 1.0")
         
         # Validate response format
         valid_formats = ["mp3", "opus", "aac", "flac", "wav", "pcm"]
@@ -188,7 +198,9 @@ async def create_speech(
             text=input,
             voice=voice,
             speed=speed,
-            response_format=response_format
+            response_format=response_format,
+            exaggeration=exaggeration,
+            cfg=cfg
         )
         
         # Determine content type based on format
@@ -265,6 +277,8 @@ async def create_speech_with_cloning(
     voice: str = Form(default="custom", description="Voice parameter (kept for compatibility)"),
     response_format: str = Form(default="mp3", description="The audio format"),
     speed: float = Form(default=1.0, description="The speed of the generated audio"),
+    exaggeration: float = Form(default=0.5, description="Emotion intensity and speech expressiveness (0.0-1.0)"),
+    cfg: float = Form(default=0.5, description="Classifier-free guidance for speech pacing (0.0-1.0)"),
     audio_prompt: UploadFile = File(..., description="Audio file for voice cloning (WAV format, 16kHz, mono, 5-30 seconds recommended)")
 ):
     """
@@ -277,7 +291,7 @@ async def create_speech_with_cloning(
     temp_file = None
     
     try:
-        logger.info(f"Received voice cloning TTS request: format={response_format}, speed={speed}")
+        logger.info(f"Received voice cloning TTS request: format={response_format}, speed={speed}, exaggeration={exaggeration}, cfg={cfg}")
         
         # Validate input text
         if not input or not input.strip():
@@ -286,6 +300,14 @@ async def create_speech_with_cloning(
         # Validate speed
         if speed < 0.25 or speed > 4.0:
             raise ValueError("Speed must be between 0.25 and 4.0")
+        
+        # Validate exaggeration
+        if exaggeration < 0.0 or exaggeration > 1.0:
+            raise ValueError("Exaggeration must be between 0.0 and 1.0")
+        
+        # Validate cfg
+        if cfg < 0.0 or cfg > 1.0:
+            raise ValueError("CFG must be between 0.0 and 1.0")
         
         # Validate response format
         valid_formats = ["mp3", "opus", "aac", "flac", "wav", "pcm"]
@@ -328,6 +350,8 @@ async def create_speech_with_cloning(
             voice="custom" if audio_prompt_path else voice,
             speed=speed,
             response_format=response_format,
+            exaggeration=exaggeration,
+            cfg=cfg,
             audio_prompt_path=audio_prompt_path
         )
         
