@@ -137,12 +137,12 @@ async def list_models():
         200: {
             "description": "Generated audio file",
             "content": {
-                "audio/mpeg": {},
-                "audio/wav": {},
-                "audio/flac": {},
-                "audio/aac": {},
-                "audio/opus": {},
-                "audio/pcm": {}
+                "audio/mpeg": {"schema": {"type": "string", "format": "binary"}},
+                "audio/wav": {"schema": {"type": "string", "format": "binary"}},
+                "audio/flac": {"schema": {"type": "string", "format": "binary"}},
+                "audio/aac": {"schema": {"type": "string", "format": "binary"}},
+                "audio/opus": {"schema": {"type": "string", "format": "binary"}},
+                "audio/pcm": {"schema": {"type": "string", "format": "binary"}}
             }
         },
         400: {"model": ErrorResponse, "description": "Bad request"},
@@ -151,7 +151,13 @@ async def list_models():
     summary="Generate speech from text",
     description="Generate spoken audio from text input using the Chatterbox TTS model"
 )
-async def create_speech(request: TTSRequest):
+async def create_speech(
+    model: str = Form(default="tts-1", description="The TTS model to use"),
+    input: str = Form(default="To know that you know nothing is the first step to enlightenment.", description="The text to generate audio for"),
+    voice: str = Form(default="nova", description="Voice parameter (kept for compatibility but ignored)"),
+    response_format: str = Form(default="mp3", description="The audio format"),
+    speed: float = Form(default=1.0, description="The speed of the generated audio")
+):
     """
     OpenAI-compatible text-to-speech endpoint
     
@@ -159,17 +165,30 @@ async def create_speech(request: TTSRequest):
     It's designed to be compatible with OpenAI's TTS API.
     """
     try:
-        logger.info(f"Received TTS request: voice={request.voice}, format={request.response_format}, speed={request.speed}")
+        logger.info(f"Received TTS request: voice={voice}, format={response_format}, speed={speed}")
+        
+        # Validate input text
+        if not input or not input.strip():
+            raise ValueError("Input text cannot be empty")
+        
+        # Validate speed
+        if speed < 0.25 or speed > 4.0:
+            raise ValueError("Speed must be between 0.25 and 4.0")
+        
+        # Validate response format
+        valid_formats = ["mp3", "opus", "aac", "flac", "wav", "pcm"]
+        if response_format not in valid_formats:
+            raise ValueError(f"Invalid response format. Must be one of: {', '.join(valid_formats)}")
         
         # Get TTS service
         tts = get_tts_service()
         
         # Generate speech
         audio_data = tts.generate_speech(
-            text=request.input,
-            voice=request.voice,
-            speed=request.speed,
-            response_format=request.response_format
+            text=input,
+            voice=voice,
+            speed=speed,
+            response_format=response_format
         )
         
         # Determine content type based on format
@@ -182,13 +201,14 @@ async def create_speech(request: TTSRequest):
             "pcm": "audio/pcm"
         }
         
-        content_type = content_types.get(request.response_format, "audio/mpeg")
+        content_type = content_types.get(response_format, "audio/mpeg")
         
         return Response(
             content=audio_data,
             media_type=content_type,
             headers={
-                "Content-Disposition": f'inline; filename="speech.{request.response_format}"'
+                "Content-Disposition": f'attachment; filename="speech.{response_format}"',
+                "Content-Type": content_type
             }
         )
         
@@ -225,12 +245,12 @@ async def create_speech(request: TTSRequest):
         200: {
             "description": "Generated audio file with cloned voice",
             "content": {
-                "audio/mpeg": {},
-                "audio/wav": {},
-                "audio/flac": {},
-                "audio/aac": {},
-                "audio/opus": {},
-                "audio/pcm": {}
+                "audio/mpeg": {"schema": {"type": "string", "format": "binary"}},
+                "audio/wav": {"schema": {"type": "string", "format": "binary"}},
+                "audio/flac": {"schema": {"type": "string", "format": "binary"}},
+                "audio/aac": {"schema": {"type": "string", "format": "binary"}},
+                "audio/opus": {"schema": {"type": "string", "format": "binary"}},
+                "audio/pcm": {"schema": {"type": "string", "format": "binary"}}
             }
         },
         400: {"model": ErrorResponse, "description": "Bad request"},
@@ -317,7 +337,8 @@ async def create_speech_with_cloning(
             content=audio_data,
             media_type=content_type,
             headers={
-                "Content-Disposition": f'inline; filename="speech_cloned.{response_format}"'
+                "Content-Disposition": f'attachment; filename="speech_cloned.{response_format}"',
+                "Content-Type": content_type
             }
         )
         
