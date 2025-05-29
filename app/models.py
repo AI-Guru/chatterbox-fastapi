@@ -3,11 +3,18 @@ from typing import Literal, Optional, Union
 
 
 class TTSRequest(BaseModel):
-    model: str = Field(..., description="The TTS model to use (currently ignored but required for compatibility)")
-    input: str = Field(..., description="The text to generate audio for", max_length=4096)
+    model: str = Field(
+        default="tts-1", 
+        description="The TTS model to use (currently ignored but required for compatibility)"
+    )
+    input: str = Field(
+        default="To know that you know nothing is the first step to enlightenment.",
+        description="The text to generate audio for", 
+        max_length=4096
+    )
     voice: Union[Literal["alloy", "echo", "fable", "nova", "onyx", "shimmer"], str] = Field(
         default="nova",
-        description="The voice to use for audio generation. Can be a preset name or 'custom' for voice cloning"
+        description="The voice to use for audio generation (parameter kept for compatibility but ignored)"
     )
     response_format: Optional[Literal["mp3", "opus", "aac", "flac", "wav", "pcm"]] = Field(
         default="mp3",
@@ -27,12 +34,6 @@ class TTSRequest(BaseModel):
         return v
 
 
-class VoiceCloningRequest(TTSRequest):
-    """Extended TTS request with voice cloning support"""
-    audio_prompt_url: Optional[str] = Field(
-        None,
-        description="URL to the audio file for voice cloning (WAV format recommended)"
-    )
 
 
 class ErrorResponse(BaseModel):

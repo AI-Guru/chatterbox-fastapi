@@ -66,16 +66,12 @@ class TTSService:
             Audio data as bytes
         """
         try:
-            # Map OpenAI voices to Chatterbox parameters (this is a simplified mapping)
-            voice_params = self._get_voice_params(voice)
-            
-            # Generate audio with Chatterbox
+            # Voice parameter is kept for API compatibility but ignored
             logger.info(f"Generating speech for text: {text[:50]}...")
             
-            # Generate the audio waveform
+            # Generate the audio waveform with default parameters
             generate_kwargs = {
-                "exaggeration": voice_params.get("exaggeration", 0.5),
-                "cfg": voice_params.get("cfg", 0.5)
+                "exaggeration": 0.5  # Use default exaggeration
             }
             
             # Add audio prompt for voice cloning if provided
@@ -99,18 +95,6 @@ class TTSService:
             logger.error(f"Failed to generate speech: {str(e)}")
             raise
             
-    def _get_voice_params(self, voice: str) -> Dict[str, Any]:
-        """Map OpenAI voice names to Chatterbox parameters"""
-        voice_mapping = {
-            "alloy": {"exaggeration": 0.3, "cfg": 0.5},
-            "echo": {"exaggeration": 0.4, "cfg": 0.6},
-            "fable": {"exaggeration": 0.6, "cfg": 0.4},
-            "nova": {"exaggeration": 0.5, "cfg": 0.5},  # Default balanced
-            "onyx": {"exaggeration": 0.2, "cfg": 0.7},
-            "shimmer": {"exaggeration": 0.7, "cfg": 0.3}
-        }
-        return voice_mapping.get(voice, voice_mapping["nova"])
-    
     def _adjust_speed(self, wav: torch.Tensor, speed: float) -> torch.Tensor:
         """Adjust the speed of the audio"""
         if speed == 1.0:

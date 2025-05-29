@@ -1,10 +1,10 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.responses import Response, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 from contextlib import asynccontextmanager
 from app.config import settings
-from app.models import TTSRequest, VoiceCloningRequest, ErrorResponse, ErrorDetail
+from app.models import TTSRequest, ErrorResponse, ErrorDetail
 from app.tts_service import get_tts_service
 import uvicorn
 import tempfile
@@ -67,6 +67,7 @@ async def root():
         "endpoints": {
             "tts": "/v1/audio/speech",
             "tts_clone": "/v1/audio/speech/clone",
+            "models": "/v1/models",
             "docs": "/docs",
             "openapi": "/openapi.json"
         }
@@ -95,6 +96,38 @@ async def health_check():
                 "error": str(e)
             }
         )
+
+
+@app.get("/v1/models")
+async def list_models():
+    """
+    List available models (OpenAI API compatible)
+    
+    Returns a list of available TTS models for compatibility with OpenAI API clients.
+    """
+    return {
+        "object": "list",
+        "data": [
+            {
+                "id": "tts-1",
+                "object": "model",
+                "created": 1677610602,
+                "owned_by": "resemble-ai",
+                "permission": [],
+                "root": "tts-1",
+                "parent": None
+            },
+            {
+                "id": "tts-1-hd",
+                "object": "model", 
+                "created": 1677610602,
+                "owned_by": "resemble-ai",
+                "permission": [],
+                "root": "tts-1-hd",
+                "parent": None
+            }
+        ]
+    }
 
 
 @app.post(
@@ -204,50 +237,67 @@ async def create_speech(request: TTSRequest):
         500: {"model": ErrorResponse, "description": "Internal server error"}
     },
     summary="Generate speech with voice cloning",
-    description="Generate spoken audio from text input using voice cloning from an audio sample"
+    description="Generate spoken audio from text input using voice cloning from an uploaded audio sample"
 )
-async def create_speech_with_cloning(request: VoiceCloningRequest):
+async def create_speech_with_cloning(
+    model: str = Form(default="tts-1", description="The TTS model to use"),
+    input: str = Form(default="To know that you know nothing is the first step to enlightenment.", description="The text to generate audio for"),
+    voice: str = Form(default="custom", description="Voice parameter (kept for compatibility)"),
+    response_format: str = Form(default="mp3", description="The audio format"),
+    speed: float = Form(default=1.0, description="The speed of the generated audio"),
+    audio_prompt: UploadFile = File(..., description="Audio file for voice cloning (WAV format recommended)")
+):
     """
     Extended TTS endpoint with voice cloning support
     
-    This endpoint accepts text input and an audio sample URL to clone the voice.
+    This endpoint accepts text input and an uploaded audio file to clone the voice.
     The audio sample should be a WAV file for best results.
     """
     audio_prompt_path = None
     temp_file = None
     
     try:
-        logger.info(f"Received voice cloning TTS request: format={request.response_format}, speed={request.speed}")
+        logger.info(f"Received voice cloning TTS request: format={response_format}, speed={speed}")
         
-        # Download audio prompt if provided
-        if request.audio_prompt_url:
-            logger.info(f"Downloading audio prompt from: {request.audio_prompt_url}")
+        # Validate input text
+        if not input or not input.strip():
+            raise ValueError("Input text cannot be empty")
+        
+        # Validate speed
+        if speed < 0.25 or speed > 4.0:
+            raise ValueError("Speed must be between 0.25 and 4.0")
+        
+        # Validate response format
+        valid_formats = ["mp3", "opus", "aac", "flac", "wav", "pcm"]
+        if response_format not in valid_formats:
+            raise ValueError(f"Invalid response format. Must be one of: {', '.join(valid_formats)}")
+        
+        # Save uploaded audio file to temporary location
+        if audio_prompt:
+            logger.info(f"Processing uploaded audio file: {audio_prompt.filename}")
             
             # Create temporary file for audio prompt
-            temp_file = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+            file_extension = audio_prompt.filename.split('.')[-1] if '.' in audio_prompt.filename else 'wav'
+            temp_file = tempfile.NamedTemporaryFile(suffix=f".{file_extension}", delete=False)
             audio_prompt_path = temp_file.name
-            temp_file.close()
             
-            # Download the audio file
-            async with httpx.AsyncClient() as client:
-                response = await client.get(request.audio_prompt_url)
-                response.raise_for_status()
-                
-                # Save to temporary file
-                async with aiofiles.open(audio_prompt_path, 'wb') as f:
-                    await f.write(response.content)
-                    
-            logger.info(f"Audio prompt downloaded to: {audio_prompt_path}")
+            # Save uploaded file content
+            content = await audio_prompt.read()
+            async with aiofiles.open(audio_prompt_path, 'wb') as f:
+                await f.write(content)
+            
+            temp_file.close()
+            logger.info(f"Audio prompt saved to: {audio_prompt_path}")
         
         # Get TTS service
         tts = get_tts_service()
         
         # Generate speech with voice cloning
         audio_data = tts.generate_speech(
-            text=request.input,
-            voice="custom" if audio_prompt_path else request.voice,
-            speed=request.speed,
-            response_format=request.response_format,
+            text=input,
+            voice="custom" if audio_prompt_path else voice,
+            speed=speed,
+            response_format=response_format,
             audio_prompt_path=audio_prompt_path
         )
         
@@ -261,28 +311,16 @@ async def create_speech_with_cloning(request: VoiceCloningRequest):
             "pcm": "audio/pcm"
         }
         
-        content_type = content_types.get(request.response_format, "audio/mpeg")
+        content_type = content_types.get(response_format, "audio/mpeg")
         
         return Response(
             content=audio_data,
             media_type=content_type,
             headers={
-                "Content-Disposition": f'inline; filename="speech_cloned.{request.response_format}"'
+                "Content-Disposition": f'inline; filename="speech_cloned.{response_format}"'
             }
         )
         
-    except httpx.HTTPError as e:
-        logger.error(f"Error downloading audio prompt: {e}")
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error": {
-                    "message": f"Failed to download audio prompt: {str(e)}",
-                    "type": "invalid_request_error",
-                    "code": "audio_download_failed"
-                }
-            }
-        )
     except ValueError as e:
         logger.error(f"Validation error: {e}")
         raise HTTPException(

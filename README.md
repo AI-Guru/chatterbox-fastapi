@@ -7,7 +7,7 @@ An OpenAI-compatible Text-to-Speech (TTS) API server built with FastAPI and the 
 ## Features
 
 - 🎯 **OpenAI API Compatible**: Implements the `/v1/audio/speech` endpoint with the same request/response format
-- 🎙️ **Multiple Voices**: Supports 6 different voice profiles (alloy, echo, fable, nova, onyx, shimmer)
+- 🎙️ **Consistent Voice**: Uses the Chatterbox model's default voice parameters
 - 🎤 **Voice Cloning**: Clone any voice with just 5-30 seconds of audio sample
 - 🎵 **Multiple Audio Formats**: Supports MP3, WAV, FLAC, OPUS, AAC, and PCM output formats
 - ⚡ **Speed Control**: Adjustable speech speed from 0.25x to 4.0x
@@ -109,7 +109,7 @@ Generate speech from text input.
 
 - `model` (string, required): The TTS model to use (currently ignored but required for compatibility)
 - `input` (string, required): The text to generate audio for (max 4096 characters)
-- `voice` (string, optional): The voice to use. Options: `alloy`, `echo`, `fable`, `nova`, `onyx`, `shimmer`. Default: `nova`
+- `voice` (string, optional): The voice to use (parameter kept for compatibility but ignored). Default: `nova`
 - `response_format` (string, optional): The audio format. Options: `mp3`, `opus`, `aac`, `flac`, `wav`, `pcm`. Default: `mp3`
 - `speed` (float, optional): The speed of the generated audio (0.25 to 4.0). Default: `1.0`
 
@@ -168,37 +168,27 @@ response.stream_to_file("output.mp3")
 
 ### Endpoint: POST `/v1/audio/speech/clone`
 
-Generate speech with voice cloning from an audio sample.
+Generate speech with voice cloning from an uploaded audio sample.
 
-#### Request Body
+#### Request Body (multipart/form-data)
 
-```json
-{
-  "model": "tts-1",
-  "input": "Hello, this is a cloned voice speaking.",
-  "voice": "custom",
-  "audio_prompt_url": "https://example.com/voice-sample.wav",
-  "response_format": "mp3",
-  "speed": 1.0
-}
-```
-
-#### Parameters
-
-All parameters from the standard endpoint plus:
-- `audio_prompt_url` (string, optional): URL to a WAV audio file for voice cloning (5-30 seconds recommended)
+- `model` (string): The TTS model to use (default: "tts-1")
+- `input` (string): The text to generate audio for (default: "To know that you know nothing is the first step to enlightenment.")
+- `voice` (string): Voice parameter (kept for compatibility, default: "custom")
+- `response_format` (string): The audio format (default: "mp3")
+- `speed` (float): The speed of the generated audio (default: 1.0)
+- `audio_prompt` (file): Audio file for voice cloning (WAV format recommended, 5-30 seconds)
 
 #### Example using cURL
 
 ```bash
 curl -X POST http://localhost:8000/v1/audio/speech/clone \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "tts-1",
-    "input": "This is my cloned voice!",
-    "audio_prompt_url": "https://example.com/my-voice.wav",
-    "response_format": "wav"
-  }' \
+  -F "model=tts-1" \
+  -F "input=This is my cloned voice!" \
+  -F "voice=custom" \
+  -F "response_format=wav" \
+  -F "speed=1.0" \
+  -F "audio_prompt=@path/to/your/voice-sample.wav" \
   --output cloned_speech.wav
 ```
 
@@ -207,16 +197,20 @@ curl -X POST http://localhost:8000/v1/audio/speech/clone \
 ```python
 import requests
 
-response = requests.post(
-    "http://localhost:8000/v1/audio/speech/clone",
-    json={
-        "model": "tts-1",
-        "input": "Hello with a cloned voice!",
-        "audio_prompt_url": "https://example.com/voice-sample.wav",
-        "voice": "custom",
-        "response_format": "mp3"
-    }
-)
+with open("voice-sample.wav", "rb") as audio_file:
+    response = requests.post(
+        "http://localhost:8000/v1/audio/speech/clone",
+        data={
+            "model": "tts-1",
+            "input": "Hello with a cloned voice!",
+            "voice": "custom",
+            "response_format": "mp3",
+            "speed": 1.0
+        },
+        files={
+            "audio_prompt": audio_file
+        }
+    )
 
 with open("cloned_output.mp3", "wb") as f:
     f.write(response.content)
@@ -228,17 +222,6 @@ Interactive API documentation is available at:
 - Swagger UI: `http://localhost:8000/docs`
 - ReDoc: `http://localhost:8000/redoc`
 - OpenAPI JSON: `http://localhost:8000/openapi.json`
-
-## Voice Profiles
-
-The server maps OpenAI's voice names to different Chatterbox model parameters:
-
-- **alloy**: Clear and balanced
-- **echo**: Slightly ethereal with more reverb
-- **fable**: Expressive and dramatic
-- **nova**: Natural and versatile (default)
-- **onyx**: Deep and authoritative
-- **shimmer**: Bright and energetic
 
 ## Performance Considerations
 
