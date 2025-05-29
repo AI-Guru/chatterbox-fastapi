@@ -1,19 +1,26 @@
-version: '3.8'
-
 services:
   chatterbox-api:
     build: .
     ports:
-      - "8000:8000"
+      - "8308:8308"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     environment:
-      - PORT=8000
+      - CUDA_VISIBLE_DEVICES=0
+      - PORT=8308
       - HOST=0.0.0.0
-      - DEVICE=cuda  # GPU is required
+      - DEVICE=cuda
       - MODEL_CACHE_DIR=/app/models
       - LOG_LEVEL=info
     volumes:
-      - ./models:/app/models  # Persist model cache between restarts
-    restart: no
+      - .:/app
+      - ./models:/app/models
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
