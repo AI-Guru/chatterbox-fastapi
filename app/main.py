@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 from contextlib import asynccontextmanager
 from app.config import settings
-from app.models import TTSRequest, ErrorResponse, ErrorDetail
+from app.models import TTSRequest, TTSCloneRequest, ErrorResponse, ErrorDetail
 from app.tts_service import get_tts_service
 import uvicorn
 import tempfile
@@ -258,13 +258,7 @@ async def create_speech(request: TTSRequest):
     description="Generate spoken audio from text input using voice cloning from an uploaded audio sample"
 )
 async def create_speech_with_cloning(
-    model: str = Form(default="tts-1", description="The TTS model to use"),
-    input: str = Form(default="To know that you know nothing is the first step to enlightenment.", description="The text to generate audio for"),
-    voice: str = Form(default="custom", description="Voice parameter (kept for compatibility)"),
-    response_format: str = Form(default="mp3", description="The audio format"),
-    speed: float = Form(default=1.0, description="The speed of the generated audio"),
-    exaggeration: float = Form(default=0.5, description="Emotion intensity and speech expressiveness (0.0-1.0)"),
-    cfg: float = Form(default=0.5, description="Classifier-free guidance for speech pacing (0.0-1.0)"),
+    request: str = Form(..., description="JSON request data"),
     audio_prompt: UploadFile = File(..., description="Audio file for voice cloning (WAV format, 16kHz, mono, 5-30 seconds recommended)")
 ):
     """
@@ -277,27 +271,32 @@ async def create_speech_with_cloning(
     temp_file = None
     
     try:
-        logger.info(f"Received voice cloning TTS request: format={response_format}, speed={speed}, exaggeration={exaggeration}, cfg={cfg}")
+        # Parse the JSON request
+        import json
+        req_data = json.loads(request)
+        req = TTSCloneRequest(**req_data)
+        
+        logger.info(f"Received voice cloning TTS request: format={req.response_format}, speed={req.speed}, exaggeration={req.exaggeration}, cfg={req.cfg}")
         
         # Validate input text
-        if not input or not input.strip():
+        if not req.input or not req.input.strip():
             raise ValueError("Input text cannot be empty")
         
         # Validate speed
-        if speed < 0.25 or speed > 4.0:
+        if req.speed < 0.25 or req.speed > 4.0:
             raise ValueError("Speed must be between 0.25 and 4.0")
         
         # Validate exaggeration
-        if exaggeration < 0.0 or exaggeration > 1.0:
+        if req.exaggeration < 0.0 or req.exaggeration > 1.0:
             raise ValueError("Exaggeration must be between 0.0 and 1.0")
         
         # Validate cfg
-        if cfg < 0.0 or cfg > 1.0:
+        if req.cfg < 0.0 or req.cfg > 1.0:
             raise ValueError("CFG must be between 0.0 and 1.0")
         
         # Validate response format
         valid_formats = ["mp3", "opus", "aac", "flac", "wav", "pcm"]
-        if response_format not in valid_formats:
+        if req.response_format not in valid_formats:
             raise ValueError(f"Invalid response format. Must be one of: {', '.join(valid_formats)}")
         
         # Save uploaded audio file to temporary location
@@ -332,10 +331,10 @@ async def create_speech_with_cloning(
         
         # Generate speech with voice cloning
         audio_data = tts.generate_speech(
-            text=input,
-            response_format=response_format,
-            exaggeration=exaggeration,
-            cfg=cfg,
+            text=req.input,
+            response_format=req.response_format,
+            exaggeration=req.exaggeration,
+            cfg=req.cfg,
             audio_prompt_path=audio_prompt_path
         )
         
@@ -349,13 +348,13 @@ async def create_speech_with_cloning(
             "pcm": "audio/pcm"
         }
         
-        content_type = content_types.get(response_format, "audio/mpeg")
+        content_type = content_types.get(req.response_format, "audio/mpeg")
         
         return Response(
             content=audio_data,
             media_type=content_type,
             headers={
-                "Content-Disposition": f'attachment; filename="speech_cloned.{response_format}"',
+                "Content-Disposition": f'attachment; filename="speech_cloned.{req.response_format}"',
                 "Content-Type": content_type
             }
         )

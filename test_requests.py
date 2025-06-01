@@ -126,12 +126,8 @@ def test_speech_clone_endpoint():
         temp_file_path = temp_file.name
     
     try:
-        # Prepare form data
-        files = {
-            'audio_prompt': ('test.wav', open(temp_file_path, 'rb'), 'audio/wav')
-        }
-        
-        data = {
+        # Prepare form data with JSON request
+        request_data = {
             'model': 'tts-1',
             'input': 'This is a test of voice cloning functionality.',
             'voice': 'custom',
@@ -139,6 +135,14 @@ def test_speech_clone_endpoint():
             'speed': 1.0,
             'exaggeration': 0.5,
             'cfg': 0.5
+        }
+        
+        files = {
+            'audio_prompt': ('test.wav', open(temp_file_path, 'rb'), 'audio/wav')
+        }
+        
+        data = {
+            'request': json.dumps(request_data)
         }
         
         response = requests.post(url, files=files, data=data, timeout=60)
