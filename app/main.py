@@ -151,15 +151,7 @@ async def list_models():
     summary="Generate speech from text",
     description="Generate spoken audio from text input using the Chatterbox TTS model"
 )
-async def create_speech(
-    model: str = Form(default="tts-1", description="The TTS model to use"),
-    input: str = Form(default="To know that you know nothing is the first step to enlightenment.", description="The text to generate audio for"),
-    voice: str = Form(default="nova", description="Voice parameter (kept for compatibility but ignored)"),
-    response_format: str = Form(default="mp3", description="The audio format"),
-    speed: float = Form(default=1.0, description="The speed of the generated audio"),
-    exaggeration: float = Form(default=0.5, description="Emotion intensity and speech expressiveness (0.0-1.0)"),
-    cfg: float = Form(default=0.5, description="Classifier-free guidance for speech pacing (0.0-1.0)")
-):
+async def create_speech(request: TTSRequest):
     """
     OpenAI-compatible text-to-speech endpoint
     
@@ -167,27 +159,27 @@ async def create_speech(
     It's designed to be compatible with OpenAI's TTS API.
     """
     try:
-        logger.info(f"Received TTS request: voice={voice}, format={response_format}, speed={speed}, exaggeration={exaggeration}, cfg={cfg}")
+        logger.info(f"Received TTS request: voice={request.voice}, format={request.response_format}, speed={request.speed}, exaggeration={request.exaggeration}, cfg={request.cfg}")
         
         # Validate input text
-        if not input or not input.strip():
+        if not request.input or not request.input.strip():
             raise ValueError("Input text cannot be empty")
         
         # Validate speed
-        if speed < 0.25 or speed > 4.0:
+        if request.speed < 0.25 or request.speed > 4.0:
             raise ValueError("Speed must be between 0.25 and 4.0")
         
         # Validate exaggeration
-        if exaggeration < 0.0 or exaggeration > 1.0:
+        if request.exaggeration < 0.0 or request.exaggeration > 1.0:
             raise ValueError("Exaggeration must be between 0.0 and 1.0")
         
         # Validate cfg
-        if cfg < 0.0 or cfg > 1.0:
+        if request.cfg < 0.0 or request.cfg > 1.0:
             raise ValueError("CFG must be between 0.0 and 1.0")
         
         # Validate response format
         valid_formats = ["mp3", "opus", "aac", "flac", "wav", "pcm"]
-        if response_format not in valid_formats:
+        if request.response_format not in valid_formats:
             raise ValueError(f"Invalid response format. Must be one of: {', '.join(valid_formats)}")
         
         # Get TTS service
@@ -195,12 +187,12 @@ async def create_speech(
         
         # Generate speech
         audio_data = tts.generate_speech(
-            text=input,
-            voice=voice,
-            speed=speed,
-            response_format=response_format,
-            exaggeration=exaggeration,
-            cfg=cfg
+            text=request.input,
+            voice=request.voice,
+            speed=request.speed,
+            response_format=request.response_format,
+            exaggeration=request.exaggeration,
+            cfg=request.cfg
         )
         
         # Determine content type based on format
@@ -213,13 +205,13 @@ async def create_speech(
             "pcm": "audio/pcm"
         }
         
-        content_type = content_types.get(response_format, "audio/mpeg")
+        content_type = content_types.get(request.response_format, "audio/mpeg")
         
         return Response(
             content=audio_data,
             media_type=content_type,
             headers={
-                "Content-Disposition": f'attachment; filename="speech.{response_format}"',
+                "Content-Disposition": f'attachment; filename="speech.{request.response_format}"',
                 "Content-Type": content_type
             }
         )
