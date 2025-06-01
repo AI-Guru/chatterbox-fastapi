@@ -159,15 +159,11 @@ async def create_speech(request: TTSRequest):
     It's designed to be compatible with OpenAI's TTS API.
     """
     try:
-        logger.info(f"Received TTS request: voice={request.voice}, format={request.response_format}, speed={request.speed}, exaggeration={request.exaggeration}, cfg={request.cfg}")
+        logger.info(f"Received TTS request: format={request.response_format}, exaggeration={request.exaggeration}, cfg={request.cfg}")
         
         # Validate input text
         if not request.input or not request.input.strip():
             raise ValueError("Input text cannot be empty")
-        
-        # Validate speed
-        if request.speed < 0.25 or request.speed > 4.0:
-            raise ValueError("Speed must be between 0.25 and 4.0")
         
         # Validate exaggeration
         if request.exaggeration < 0.0 or request.exaggeration > 1.0:
@@ -188,8 +184,6 @@ async def create_speech(request: TTSRequest):
         # Generate speech
         audio_data = tts.generate_speech(
             text=request.input,
-            voice=request.voice,
-            speed=request.speed,
             response_format=request.response_format,
             exaggeration=request.exaggeration,
             cfg=request.cfg
@@ -339,8 +333,6 @@ async def create_speech_with_cloning(
         # Generate speech with voice cloning
         audio_data = tts.generate_speech(
             text=input,
-            voice="custom" if audio_prompt_path else voice,
-            speed=speed,
             response_format=response_format,
             exaggeration=exaggeration,
             cfg=cfg,

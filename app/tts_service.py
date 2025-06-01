@@ -105,8 +105,6 @@ class TTSService:
     def generate_speech(
         self,
         text: str,
-        voice: str = "nova",
-        speed: float = 1.0,
         response_format: str = "wav",
         exaggeration: float = 0.5,
         cfg: float = 0.5,
@@ -117,8 +115,6 @@ class TTSService:
         
         Args:
             text: The text to convert to speech
-            voice: The voice to use (kept for compatibility but ignored)
-            speed: The speed of the speech (0.25 to 4.0)
             response_format: The output audio format
             exaggeration: Emotion intensity and speech expressiveness (0.0 to 1.0)
             cfg: Classifier-free guidance weight for speech pacing (0.0 to 1.0)
@@ -129,12 +125,12 @@ class TTSService:
         """
         try:
             # Voice parameter is kept for API compatibility but ignored
-            logger.info(f"Generating speech for text: {text[:50]}...")
+            logger.info(f"Generating speech for text: {text[:50]} with exaggeration: {exaggeration}, cfg: {cfg}, format: {response_format}")
             
             # Generate the audio waveform with specified parameters
             generate_kwargs = {
                 "exaggeration": exaggeration,
-                "cfg_weight": cfg
+                "cfg_weight": cfg,
             }
             
             # Add audio prompt for voice cloning if provided
@@ -142,14 +138,16 @@ class TTSService:
                 generate_kwargs["audio_prompt_path"] = audio_prompt_path
                 logger.info(f"Using audio prompt for voice cloning: {audio_prompt_path}")
                 
+            # Generate the waveform.
             wav = self.model.generate(text, **generate_kwargs)
-            
-            # Apply speed adjustment if needed
-            if speed != 1.0:
-                wav = self._adjust_speed(wav, speed)
             
             # Convert to the requested format
             audio_bytes = self._convert_audio_format(wav, response_format)
+            
+            # Explicit cleanup of GPU tensors
+            if torch.cuda.is_available():
+                del wav
+                torch.cuda.empty_cache()
             
             logger.info(f"Successfully generated {len(audio_bytes)} bytes of {response_format} audio")
             return audio_bytes
@@ -171,28 +169,6 @@ class TTSService:
             logger.error(f"Failed to generate speech: {str(e)}")
             raise
             
-    def _adjust_speed(self, wav: torch.Tensor, speed: float) -> torch.Tensor:
-        """Adjust the speed of the audio"""
-        if speed == 1.0:
-            return wav
-            
-        # Use resampling to adjust speed
-        # Higher speed = higher sample rate = faster playback
-        new_sample_rate = int(self.sample_rate * speed)
-        wav_resampled = ta.functional.resample(
-            wav,
-            orig_freq=self.sample_rate,
-            new_freq=new_sample_rate
-        )
-        
-        # Resample back to original sample rate
-        wav_final = ta.functional.resample(
-            wav_resampled,
-            orig_freq=new_sample_rate,
-            new_freq=self.sample_rate
-        )
-        
-        return wav_final
     
     def _convert_audio_format(self, wav: torch.Tensor, format: str) -> bytes:
         """Convert audio tensor to the requested format"""
@@ -220,12 +196,15 @@ class TTSService:
             # Raw PCM data
             pcm_data = (wav.numpy() * 32767).astype(np.int16)
             buffer.write(pcm_data.tobytes())
+            del pcm_data  # Clean up numpy array
         else:
             # Default to wav
             ta.save(buffer, wav, self.sample_rate, format="wav")
             
         buffer.seek(0)
-        return buffer.read()
+        audio_data = buffer.read()
+        buffer.close()  # Explicit buffer cleanup
+        return audio_data
 
 
 # Global TTS service instance
