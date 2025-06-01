@@ -10,6 +10,15 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+model_files = [
+    "ve.pt",  # Voice encoder
+    "t3_cfg.pt",  # Text-to-tokens model,
+    "s3gen.pt",  # Speech generation model
+    "conds.pt",  # Optional conditional embeddings
+    "tokenizer.json",  # Tokenizer file
+]
+
+
 
 class TTSService:
     def __init__(self):
@@ -35,14 +44,62 @@ class TTSService:
             # Create model cache directory if it doesn't exist
             os.makedirs(settings.model_cache_dir, exist_ok=True)
             
-            # Load the model - torch.load is already patched to handle CPU mapping
-            self.model = ChatterboxTTS.from_pretrained(device=device)
+            # Check if model is already cached locally
+            cached_model_path = os.path.join(settings.model_cache_dir, "chatterbox")
+            if not self._is_model_cached(cached_model_path):
+                logger.info("Downloading model files to cache directory")
+                self._download_model_to_cache(cached_model_path)
+            
+            logger.info(f"Loading model from cache: {cached_model_path}")
+            self.model = ChatterboxTTS.from_local(cached_model_path, device=device)
+                
             self.sample_rate = self.model.sr
             
             logger.info(f"Model initialized successfully on {device}")
             
         except Exception as e:
             logger.error(f"Failed to initialize TTS model: {str(e)}")
+            raise
+    
+    def _is_model_cached(self, cache_path: str) -> bool:
+        """Check if the model files are already cached locally"""
+        
+        # Check if all required files exist
+        for file_name in model_files:
+            file_path = os.path.join(cache_path, file_name)
+            if not os.path.exists(file_path):
+                return False
+        
+        logger.info(f"Found cached model files in {cache_path}")
+        return True
+    
+    def _download_model_to_cache(self, cache_path: str):
+        """Download model files directly to cache directory"""
+        try:
+            logger.info(f"Downloading model files to {cache_path}")
+            os.makedirs(cache_path, exist_ok=True)
+            
+            from huggingface_hub import hf_hub_download
+            import shutil
+            
+            # Download the required model files directly to cache
+            repo_id = "ResembleAI/chatterbox"
+            
+            for file_name in model_files:
+                logger.info(f"Downloading {file_name}...")
+                # Download file and copy to our cache directory
+                cache_file_path = os.path.join(cache_path, file_name)
+                if os.path.exists(cache_file_path):
+                    logger.info(f"{file_name} already exists in cache, skipping download")
+                    continue
+                hf_path = hf_hub_download(repo_id=repo_id, filename=file_name)
+                shutil.copy2(hf_path, cache_file_path)
+                logger.info(f"Downloaded {file_name} to {cache_file_path}")
+            
+            logger.info("Model download completed successfully")
+                
+        except Exception as e:
+            logger.error(f"Failed to download model files: {str(e)}")
             raise
             
     def generate_speech(
